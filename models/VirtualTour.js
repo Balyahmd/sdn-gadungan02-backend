@@ -1,8 +1,6 @@
-import db from '../config/db.js';
+import db from "../config/db.js";
 
 class VirtualTour {
-
-
   static async create({ nama_ruangan, gambar_panorama, author }) {
     const query = `
       INSERT INTO tb_panorama (nama_ruangan, gambar_panorama, author, created_at)
@@ -14,9 +12,8 @@ class VirtualTour {
     return rows[0];
   }
 
-
   // In VirtualTour model
-  static async findAll(search = '') {
+  static async findAll(search = "") {
     const query = `
       SELECT 
         p.*,
@@ -39,7 +36,7 @@ class VirtualTour {
           '[]'
         ) as hotspots
       FROM tb_panorama p
-      ${search ? `WHERE p.nama_ruangan ILIKE '%${search}%'` : ''}
+      ${search ? `WHERE p.nama_ruangan ILIKE '%${search}%'` : ""}
     `;
     const { rows } = await db.query(query);
     return rows;
@@ -96,7 +93,15 @@ class VirtualTour {
     return rows[0];
   }
 
-  static async createHotspot({ id_panorama, pitch, yaw, targetPanoramaId, name, title, deskripsi }) {
+  static async createHotspot({
+    id_panorama,
+    pitch,
+    yaw,
+    targetPanoramaId,
+    name,
+    title,
+    deskripsi,
+  }) {
     const query = `
         INSERT INTO tb_virtual_tour_360 
         (id_panorama_asal, pitch, yaw, targetpanoramald, name_deskripsi, title, deskripsi, created_at)
@@ -110,22 +115,25 @@ class VirtualTour {
       targetPanoramaId ? Number(targetPanoramaId) : null, // Ensure numeric or null
       name,
       title,
-      deskripsi
+      deskripsi,
     ];
 
     try {
       const { rows } = await db.query(query, values);
       return rows[0];
     } catch (error) {
-      console.error('Database error in createHotspot:', {
+      console.error("Database error in createHotspot:", {
         query,
         values,
-        error: error.message
+        error: error.message,
       });
       throw error;
     }
   }
-  static async updateHotspot(id, { pitch, yaw, targetPanoramaId, name, title, deskripsi }) {
+  static async updateHotspot(
+    id,
+    { pitch, yaw, targetPanoramaId, name, title, deskripsi }
+  ) {
     const query = `
         UPDATE tb_virtual_tour_360
         SET 
@@ -145,24 +153,23 @@ class VirtualTour {
       const { rows } = await db.query(query, values);
       return rows[0];
     } catch (error) {
-      console.error('Database error in updateHotspot:', {
+      console.error("Database error in updateHotspot:", {
         query,
         values,
-        error: error.message
+        error: error.message,
       });
       throw error;
     }
   }
 
   static async delete(id) {
-    const query = 'DELETE FROM tb_panorama WHERE id = $1 RETURNING id';
+    const query = "DELETE FROM tb_panorama WHERE id = $1 RETURNING id";
     const { rows } = await db.query(query, [id]);
     return rows[0];
   }
 
-
   static async deleteHotspot(id) {
-    const query = 'DELETE FROM tb_virtual_tour_360 WHERE id = $1 RETURNING id';
+    const query = "DELETE FROM tb_virtual_tour_360 WHERE id = $1 RETURNING id";
     const { rows } = await db.query(query, [id]);
     return rows[0];
   }
