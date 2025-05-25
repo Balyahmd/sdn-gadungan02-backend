@@ -82,20 +82,21 @@ const PostsController = {
       const { id } = req.params;
       const userId = req.user.id;
 
-      const isOwner = await Post.isOwner(id, userId);
-      if (!isOwner) {
-        return res.status(403).json({
-          success: false,
-          message: "Unauthorized access",
-        });
-      }
-
-      // Cari post
+      // Cari post dulu sebelum cek owner
       const post = await Post.findById(id);
       if (!post) {
         return res.status(404).json({
           success: false,
           message: "Post not found",
+        });
+      }
+
+      // Cek owner setelah post ditemukan
+      const isOwner = await Post.isOwner(id, userId);
+      if (!isOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to update this post",
         });
       }
 
@@ -117,18 +118,28 @@ const PostsController = {
         const newThumbnail = uploadedFiles.thumbnail_postingan;
 
         if (newThumbnail) {
-          // Hapus thumbnail lama dari ImageKit (kalau ada)
+          try {
+            // Hapus thumbnail lama dari ImageKit (kalau ada)
+            if (thumbnail_postingan && thumbnail_postingan.fileId) {
+              await UploadService.delete(thumbnail_postingan.fileId);
+            }
+            thumbnail_postingan = newThumbnail;
+          } catch (error) {
+            console.error("Error deleting old thumbnail:", error);
+            // Continue with update even if delete fails
+          }
+        }
+      } else if (req.body.keepExistingImage === "false") {
+        try {
+          // Kalau user tidak ingin keep image, berarti hapus thumbnail lama
           if (thumbnail_postingan && thumbnail_postingan.fileId) {
             await UploadService.delete(thumbnail_postingan.fileId);
           }
-          thumbnail_postingan = newThumbnail;
+          thumbnail_postingan = null;
+        } catch (error) {
+          console.error("Error deleting old thumbnail:", error);
+          // Continue with update even if delete fails
         }
-      } else if (req.body.keepExistingImage === "false") {
-        // Kalau user tidak ingin keep image, berarti hapus thumbnail lama
-        if (thumbnail_postingan && thumbnail_postingan.fileId) {
-          await UploadService.delete(thumbnail_postingan.fileId);
-        }
-        thumbnail_postingan = null;
       }
 
       // Update post data
@@ -171,6 +182,17 @@ const PostsController = {
   deletePost: async (req, res) => {
     try {
       const { id } = req.params;
+
+      // Get post data first to get the fileId
+      const post = await Post.findById(id);
+
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: "Post not found",
+        });
+      }
+
       const isOwner = await Post.isOwner(id, req.user.id);
 
       if (!isOwner) {
@@ -180,7 +202,19 @@ const PostsController = {
         });
       }
 
-      await Post.UploadService.delete(fileID);
+      // Delete thumbnail from storage if exists
+      if (post.thumbnail_postingan) {
+        try {
+          const thumbnailData = JSON.parse(post.thumbnail_postingan);
+          if (thumbnailData.fileId) {
+            await UploadService.delete(thumbnailData.fileId);
+          }
+        } catch (err) {
+          console.error("Error parsing thumbnail data:", err);
+        }
+      }
+
+      await Post.delete(id);
 
       res.json({
         success: true,

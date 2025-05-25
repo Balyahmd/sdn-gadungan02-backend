@@ -18,7 +18,7 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  virtualUpload.single("gambar_panorama"),
+  fileHandlerMiddleware,
   VirtualTourController.updateVirtualTour
 );
 router.delete("/:id", authenticate, VirtualTourController.deleteVirtualTour);

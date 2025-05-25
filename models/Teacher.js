@@ -29,7 +29,7 @@ class Teacher {
       const result = await db.query(
         `INSERT INTO tb_guru 
                 (nama_guru, pas_foto, nip, keterangan_guru, author, created_at, updated_at) 
-                VALUES ($1, $2, $3, $4, $5, NWOW(), NOW()) RETURNING *`,
+                VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING *`,
         [nama_guru, pas_foto, nip, keterangan_guru, author]
       );
       return result.rows[0];

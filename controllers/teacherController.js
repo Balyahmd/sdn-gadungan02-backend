@@ -1,11 +1,10 @@
 import Teacher from "../models/Teacher.js";
-import fs from "fs";
 import UploadService from "../service/uploadService.js";
+import fs from "fs";
 
 const TeacherController = {
   getAllTeachers: async (req, res) => {
     try {
-      // Call the static method to fetch teachers
       const teachers = await Teacher.findAll(req.query.search);
 
       const teachersWithUrls = teachers.map((teacher) => ({
@@ -15,123 +14,187 @@ const TeacherController = {
           : null,
       }));
 
-      res.json({
-        success: true,
-        data: teachersWithUrls,
-      });
+      res.json({ success: true, data: teachersWithUrls });
     } catch (error) {
       console.error("Error fetching teachers:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to fetch teachers",
-        error: error.message,
-      });
+      res
+        .status(500)
+        .json({ success: false, message: "Failed to fetch teachers" });
     }
   },
 
   createTeacher: async (req, res) => {
     try {
-      const { nama_guru, nip, keterangan_guru } = req.body;
-      const author = req.user.id;
+      console.log("REQ.BODY:", req.body);
+      console.log("REQ.FILES:", req.files);
 
-      if (!nama_guru || !nip) {
+      const file = req.files?.["pas_foto"]?.[0];
+
+      const { nama_guru, nip, keterangan_guru } = req.body;
+
+      if (!file) {
         return res.status(400).json({
           success: false,
-          message: "Nama dan NIP wajib diisi",
+          message: "File is required",
         });
       }
 
+      // Upload ke ImageKit
       const uploaded = await UploadService.upload(
-        { pas_foto: [req.file] },
-        "post-panorama",
-        ["pas_foto", "pas_foto"]
+        { pas_foto: [file] },
+        "teacher-photo",
+        ["teacher", "photo"]
       );
 
-      postData = {
+      const teacherData = {
         nama_guru,
-        pas_foto: uploaded.pas_foto.url,
         nip,
         keterangan_guru,
-        author,
+        pas_foto: uploaded.pas_foto.url,
+        author: req.user.id,
       };
 
-      const newTeacher = await Teacher.create(postData);
+      const newTeacher = await Teacher.create(teacherData);
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: newTeacher,
       });
     } catch (error) {
-      if (req.file) fs.unlinkSync(req.file.path);
       console.error("Error creating teacher:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to create teacher" });
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to create teacher",
+        error: error.stack,
+      });
     }
   },
 
   updateTeacher: async (req, res) => {
     try {
       const { id } = req.params;
-      const { nama_guru, nip, keterangan_guru } = req.body;
+      const userId = req.user.id;
 
+      // Cari teacher dulu
       const teacher = await Teacher.findById(id);
       if (!teacher) {
         return res.status(404).json({
           success: false,
-          message: "Guru tidak ditemukan",
+          message: "Teacher not found",
         });
       }
 
-      const pas_foto = req.file
-        ? `/static/uploads/teachers/${req.file.filename}`
-        : teacher.pas_foto;
+      // Handle upload pas_foto via UploadService
+      let pas_foto = teacher.pas_foto; // default ke yang lama
 
-      if (req.file && teacher.pas_foto) {
-        await Teacher.deleteImageFile(teacher.pas_foto);
+      // Jika ada file baru di req.files
+      if (req.files && req.files.pas_foto && req.files.pas_foto.length > 0) {
+        // Upload file baru ke ImageKit
+        const uploadedFiles = await UploadService.upload(
+          req.files,
+          "teacher-photo",
+          ["teacher"]
+        );
+        const newPhoto = uploadedFiles.pas_foto;
+
+        if (newPhoto) {
+          try {
+            // Hapus foto lama dari ImageKit (kalau ada)
+            if (pas_foto && pas_foto.fileId) {
+              await UploadService.delete(pas_foto.fileId);
+            }
+            pas_foto = newPhoto;
+          } catch (error) {
+            console.error("Error deleting old photo:", error);
+            // Continue with update even if delete fails
+          }
+        }
+      } else if (req.body.keepExistingImage === "false") {
+        try {
+          // Kalau user tidak ingin keep image, berarti hapus foto lama
+          if (pas_foto && pas_foto.fileId) {
+            await UploadService.delete(pas_foto.fileId);
+          }
+          pas_foto = null;
+        } catch (error) {
+          console.error("Error deleting old photo:", error);
+          // Continue with update even if delete fails
+        }
       }
 
-      await Teacher.update(id, {
-        nama_guru,
+      // Update teacher data
+      const updatedTeacher = await Teacher.update(id, {
+        nama_guru: req.body.nama_guru,
+        nip: req.body.nip,
+        keterangan_guru: req.body.keterangan_guru,
         pas_foto,
-        nip,
-        keterangan_guru,
       });
+
+      const photoUrl = pas_foto ? pas_foto.url : null;
 
       res.json({
         success: true,
-        data: { id, nama_guru, pas_foto, nip, keterangan_guru },
+        data: {
+          ...updatedTeacher,
+          pas_foto: photoUrl,
+        },
       });
     } catch (error) {
-      if (req.file) fs.unlinkSync(req.file.path);
+      if (req.files) {
+        for (const fileArray of Object.values(req.files)) {
+          fileArray.forEach((file) => {
+            if (file.path && fs.existsSync(file.path)) {
+              fs.unlinkSync(file.path);
+            }
+          });
+        }
+      }
       console.error("Error updating teacher:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to update teacher" });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Failed to update teacher",
+      });
     }
   },
 
   deleteTeacher: async (req, res) => {
     try {
       const { id } = req.params;
-      const imagePath = await Teacher.getImagePath(id);
 
-      const result = await Teacher.delete(id);
-      if (result.affectedRows === 0) {
+      // Get teacher data first to get the fileId
+      const teacher = await Teacher.findById(id);
+
+      if (!teacher) {
         return res.status(404).json({
           success: false,
-          message: "Guru tidak ditemukan",
+          message: "Teacher not found",
         });
       }
 
-      await Post.UploadService.delete(fileID);
+      // Delete photo from storage if exists
+      if (teacher.pas_foto) {
+        try {
+          const photoData = JSON.parse(teacher.pas_foto);
+          if (photoData.fileId) {
+            await UploadService.delete(photoData.fileId);
+          }
+        } catch (err) {
+          console.error("Error parsing photo data:", err);
+        }
+      }
 
-      res.json({ success: true, message: "Guru berhasil dihapus" });
+      await Teacher.delete(id);
+
+      res.json({
+        success: true,
+        message: "Teacher deleted successfully",
+      });
     } catch (error) {
       console.error("Error deleting teacher:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to delete teacher" });
+      res.status(error.message === "Teacher not found" ? 404 : 500).json({
+        success: false,
+        message: error.message || "Failed to delete teacher",
+      });
     }
   },
 };

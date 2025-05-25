@@ -33,17 +33,17 @@ export class UploadService {
     }
   }
 
-  static async delete(fileID) {
+  static async delete(fileId) {
     try {
-      if (!fileID) {
+      if (!fileId) {
         const err = new Error("File ID is required");
         err.statusCode = 400;
         throw err;
       }
 
-      return await imagekit.deleteFile(fileID);
+      return await imagekit.deleteFile(fileId);
     } catch (error) {
-      const err = new Error(error.message);
+      const err = new Error(`Failed to delete image: ${error.message}`);
       err.statusCode = error.statusCode || 500;
       throw err;
     }

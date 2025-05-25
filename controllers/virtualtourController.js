@@ -1,7 +1,5 @@
 import VirtualTour from "../models/VirtualTour.js";
 import db from "../config/db.js";
-import fs from "fs";
-import path from "path";
 import UploadService from "../service/uploadService.js";
 
 const VirtualTourController = {
@@ -50,33 +48,37 @@ const VirtualTourController = {
     try {
       console.log("Full request:", {
         body: req.body,
-        file: req.file,
+        files: req.files,
         user: req.user,
       });
 
       const { nama_ruangan, hotspots } = req.body;
       const author = req.user.id;
 
-      if (!req.file) {
+      const file = req.files?.["gambar_panorama"]?.[0];
+
+      if (!file) {
         return res.status(400).json({
           success: false,
           message: "Panorama image is required",
         });
       }
 
+      // Upload ke ImageKit
       const uploaded = await UploadService.upload(
-        { gambar_panorama: [req.file] },
-        "post-panorama",
-        ["gambar_panorama", "panorama"]
+        { gambar_panorama: [file] },
+        "virtual-tour",
+        ["panorama"]
       );
+
       // 1. Create the panorama first
-      const createPanorama = await VirtualTour.create({
+      const panorama = await VirtualTour.create({
         nama_ruangan,
         gambar_panorama: uploaded.gambar_panorama.url,
         author,
       });
 
-      console.log("Created panorama:", createPanorama);
+      console.log("Created panorama:", panorama);
 
       // 2. Create hotspots if they exist
       if (hotspots) {
@@ -127,24 +129,39 @@ const VirtualTourController = {
       const { id } = req.params;
       const { nama_ruangan } = req.body;
 
+      // Get existing tour
+      const oldTour = await VirtualTour.findById(id);
+      if (!oldTour) {
+        return res.status(404).json({
+          success: false,
+          message: "Virtual tour not found",
+        });
+      }
+
       let updateData = {
         nama_ruangan,
-        gambar_panorama: undefined, // Initialize as undefined
+        gambar_panorama: oldTour.gambar_panorama, // Keep existing image by default
       };
 
-      if (req.file) {
-        updateData.gambar_panorama = `/uploads/panorama/${req.file.filename}`;
+      // If new file uploaded
+      if (req.files?.gambar_panorama?.[0]) {
+        // Upload new image to ImageKit
+        const uploaded = await UploadService.upload(
+          { gambar_panorama: [req.files.gambar_panorama[0]] },
+          "virtual-tour",
+          ["panorama"]
+        );
 
-        // Delete old image if exists
-        const oldTour = await VirtualTour.findById(id);
-        if (oldTour?.gambar_panorama) {
-          const oldPath = path.join(
-            process.cwd(),
-            "static",
-            oldTour.gambar_panorama
-          );
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
+        // Update with new image URL
+        updateData.gambar_panorama = uploaded.gambar_panorama.url;
+
+        // Delete old image from ImageKit if exists
+        if (oldTour.gambar_panorama) {
+          try {
+            const fileId = oldTour.gambar_panorama.split("/").pop();
+            await UploadService.delete(fileId);
+          } catch (error) {
+            console.error("Error deleting old image:", error);
           }
         }
       }
@@ -169,7 +186,7 @@ const VirtualTourController = {
     try {
       const { id } = req.params;
 
-      // 1. Get the panorama first to get image path
+      // 1. Get the panorama first
       const tour = await VirtualTour.findById(id);
       if (!tour) {
         return res.status(404).json({
@@ -184,15 +201,13 @@ const VirtualTourController = {
         [id]
       );
 
-      // 3. Delete image file if exists
+      // 3. Delete image from ImageKit if exists
       if (tour.gambar_panorama) {
-        const imagePath = path.join(
-          process.cwd(),
-          "static",
-          tour.gambar_panorama
-        );
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
+        try {
+          const fileId = tour.gambar_panorama.split("/").pop();
+          await UploadService.delete(fileId);
+        } catch (error) {
+          console.error("Error deleting image from ImageKit:", error);
         }
       }
 

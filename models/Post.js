@@ -37,15 +37,7 @@ class Post {
 
     const result = await db.query(query, params);
 
-    // Ubah hasil supaya author jadi objek terpisah
-    return result.rows.map((row) => ({
-      ...row,
-      author: {
-        id: row.author_id,
-        nama: row.author_nama,
-        email: row.author_email,
-      },
-    }));
+    return result.rows;
   }
 
   static async findById(id) {

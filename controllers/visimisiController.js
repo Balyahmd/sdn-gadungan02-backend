@@ -53,7 +53,7 @@ const VisimisiController = {
   updateVisiMisi: async (req, res) => {
     try {
       const { text_visi, text_misi, text_tujuan } = req.body;
-      const author = req.user.username;
+      const userId = req.user.id;
 
       if (!text_visi || !text_misi || !text_tujuan) {
         return res.status(400).json({
@@ -72,7 +72,7 @@ const VisimisiController = {
           text_tujuan: Array.isArray(text_tujuan)
             ? text_tujuan.join("|")
             : text_tujuan,
-          author,
+          author: userId,
         });
       } else {
         updated = await Visimisi.createVimis({
@@ -81,7 +81,7 @@ const VisimisiController = {
           text_tujuan: Array.isArray(text_tujuan)
             ? text_tujuan.join("|")
             : text_tujuan,
-          author,
+          author: userId,
         });
       }
 
