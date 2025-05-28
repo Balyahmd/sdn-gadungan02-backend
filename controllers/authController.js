@@ -12,26 +12,26 @@ export const login = async (req, res) => {
 
     const user = await User.findByUsernameOrEmail(trimmedUsername);
 
+    // Validate username/email
     if (!user) {
-      // console.log("User not found");
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
-        error: "INVALID_CREDENTIALS",
+        message: "Username not found",
+        error: "USER_NOT_FOUND",
       });
     }
 
+    // Validate password
     const validPass = await User.comparePassword(
       trimmedPassword,
       user.password
     );
 
     if (!validPass) {
-      // console.log("Password comparison failed");
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
-        error: "INVALID_CREDENTIALS",
+        message: "Incorrect password",
+        error: "INVALID_PASSWORD",
       });
     }
 

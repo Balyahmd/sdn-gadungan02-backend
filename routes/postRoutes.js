@@ -7,6 +7,7 @@ import fileHandlerMiddleware from "../middleware/fileHandler.js";
 const router = express.Router();
 
 router.get("/", PostsController.getAllPosts);
+router.get("/:id", PostsController.getPostById);
 router.post(
   "/",
   authenticate,

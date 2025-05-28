@@ -39,12 +39,18 @@ class Post {
 
     return result.rows;
   }
-
   static async findById(id) {
-    const result = await db.query("SELECT * FROM tb_postingan WHERE id = $1", [
-      id,
-    ]);
-    return result.rows[0]; // Ambil baris pertama
+    const result = await db.query(
+      `SELECT 
+         p.*, 
+         u.username AS author_username
+       FROM tb_postingan p
+       JOIN tb_users u ON p.author = u.id
+       WHERE p.id = $1`,
+      [id]
+    );
+
+    return result.rows[0]; // Mengembalikan baris pertama (hasil tunggal)
   }
 
   static async create(postData) {

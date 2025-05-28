@@ -5,21 +5,51 @@ import fs from "fs";
 const PostsController = {
   getAllPosts: async (req, res) => {
     try {
-      const posts = await Post.findAll(req.query.search);
+      const posts = await Post.findAll(req.query.search || ""); // Ensure search param is never undefined
 
       const postsWithUrls = posts.map((post) => ({
         ...post,
-        thumbnail_postingan: post.thumbnail_postingan
-          ? `${req.protocol}://${req.get("host")}${post.thumbnail_postingan}`
-          : null,
+        thumbnail_postingan: post.thumbnail_postingan,
       }));
 
       res.json({ success: true, data: postsWithUrls });
     } catch (error) {
       console.error("Error fetching posts:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to fetch posts" });
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch posts",
+        error: error.message,
+      });
+    }
+  },
+
+  getPostById: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const post = await Post.findById(id); // menggunakan method kustom kamu
+
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: "Postingan tidak ditemukan",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...post,
+          thumbnail_postingan: post.thumbnail_postingan, // jika ada field khusus
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching post by ID:", error);
+      res.status(500).json({
+        success: false,
+        message: "Gagal mengambil postingan",
+        error: error.message,
+      });
     }
   },
 

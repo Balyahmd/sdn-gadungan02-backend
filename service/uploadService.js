@@ -41,8 +41,23 @@ export class UploadService {
         throw err;
       }
 
-      return await imagekit.deleteFile(fileId);
+      // Tambahkan logging untuk debug
+      console.log("Attempting to delete file with ID:", fileId);
+
+      const result = await imagekit.deleteFile(fileId);
+      console.log("Delete result:", result);
+
+      return result;
     } catch (error) {
+      console.error("Error deleting file:", error);
+
+      // Cek apakah error dari ImageKit
+      if (error.message && error.message.includes("File not found")) {
+        const err = new Error("File ID tidak ditemukan");
+        err.statusCode = 404;
+        throw err;
+      }
+
       const err = new Error(`Failed to delete image: ${error.message}`);
       err.statusCode = error.statusCode || 500;
       throw err;

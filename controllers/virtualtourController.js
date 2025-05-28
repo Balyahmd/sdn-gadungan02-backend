@@ -204,7 +204,7 @@ const VirtualTourController = {
       // 3. Delete image from ImageKit if exists
       if (tour.gambar_panorama) {
         try {
-          const fileId = tour.gambar_panorama.split("/").pop();
+          const fileId = tour.gambar_panorama;
           await UploadService.delete(fileId);
         } catch (error) {
           console.error("Error deleting image from ImageKit:", error);

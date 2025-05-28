@@ -25,12 +25,24 @@ class VirtualTour {
                 'pitch', v.pitch,
                 'yaw', v.yaw,
                 'text', v.name_deskripsi,
+                'title', v.title,
                 'description', v.deskripsi,
                 'targetPanoramaId', v.targetpanoramald,
-                'type', CASE WHEN v.targetpanoramald IS NOT NULL THEN 'scene' ELSE 'info' END
+                'type', CASE WHEN v.targetpanoramald IS NOT NULL THEN 'scene' ELSE 'info' END,
+                'targetPanorama', (
+                  SELECT json_build_object(
+                    'id', tp.id,
+                    'nama_ruangan', tp.nama_ruangan,
+                    'gambar_panorama', tp.gambar_panorama
+                  )
+                  FROM tb_panorama tp
+                  WHERE tp.id = v.targetpanoramald
+                  LIMIT 1
+                )
               )
             )
             FROM tb_virtual_tour_360 v
+            LEFT JOIN tb_panorama tp ON tp.id = v.targetpanoramald
             WHERE v.id_panorama_asal = p.id
           ),
           '[]'
@@ -45,7 +57,7 @@ class VirtualTour {
   static async findById(id) {
     const query = `
       SELECT 
-        p.*, 
+        p.*,
         COALESCE(
           (
             SELECT json_agg(
@@ -53,21 +65,32 @@ class VirtualTour {
                 'id', v.id,
                 'pitch', v.pitch,
                 'yaw', v.yaw,
-                'targetPanoramaId', v.targetpanoramald,
                 'text', v.name_deskripsi,
                 'title', v.title,
                 'description', v.deskripsi,
-                'type', CASE WHEN v.targetpanoramald IS NOT NULL THEN 'scene' ELSE 'info' END
+                'targetPanoramaId', v.targetpanoramald,
+                'type', CASE WHEN v.targetpanoramald IS NOT NULL THEN 'scene' ELSE 'info' END,
+                'targetPanorama', (
+                  SELECT json_build_object(
+                    'id', tp.id,
+                    'nama_ruangan', tp.nama_ruangan,
+                    'gambar_panorama', tp.gambar_panorama
+                  )
+                  FROM tb_panorama tp
+                  WHERE tp.id = v.targetpanoramald
+                  LIMIT 1
+                )
               )
             )
             FROM tb_virtual_tour_360 v
+            LEFT JOIN tb_panorama tp ON tp.id = v.targetpanoramald
             WHERE v.id_panorama_asal = p.id
-          ), 
+          ),
           '[]'
         ) as hotspots,
         (
           SELECT json_agg(json_build_object('id', t.id, 'nama_ruangan', t.nama_ruangan))
-          FROM tb_panorama t
+          FROM tb_panorama t 
           WHERE t.id != p.id
         ) as target_options
       FROM tb_panorama p

@@ -9,9 +9,7 @@ const TeacherController = {
 
       const teachersWithUrls = teachers.map((teacher) => ({
         ...teacher,
-        pas_foto: teacher.pas_foto
-          ? `${req.protocol}://${req.get("host")}${teacher.pas_foto}`
-          : null,
+        pas_foto: teacher.pas_foto,
       }));
 
       res.json({ success: true, data: teachersWithUrls });
@@ -22,7 +20,6 @@ const TeacherController = {
         .json({ success: false, message: "Failed to fetch teachers" });
     }
   },
-
   createTeacher: async (req, res) => {
     try {
       console.log("REQ.BODY:", req.body);
@@ -73,7 +70,7 @@ const TeacherController = {
   updateTeacher: async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      // const userId = req.user.id;
 
       // Cari teacher dulu
       const teacher = await Teacher.findById(id);
@@ -171,15 +168,15 @@ const TeacherController = {
         });
       }
 
-      // Delete photo from storage if exists
+      // Delete photo from ImageKit if exists
       if (teacher.pas_foto) {
         try {
-          const photoData = JSON.parse(teacher.pas_foto);
-          if (photoData.fileId) {
-            await UploadService.delete(photoData.fileId);
+          if (teacher.pas_foto.fileId) {
+            // Delete from ImageKit using UploadService
+            await UploadService.delete(teacher.pas_foto.fileId);
           }
         } catch (err) {
-          console.error("Error parsing photo data:", err);
+          console.error("Error deleting photo from ImageKit:", err);
         }
       }
 
