@@ -6,16 +6,15 @@ dotenv.config();
 
 const { Pool } = pg;
 
-pool = new Pool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false,
   },
 });
 
-const pool = new Pool(poolConfig);
-
 let retries = 3;
+
 while (retries > 0) {
   try {
     await pool.query("SELECT NOW()");
