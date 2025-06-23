@@ -9,6 +9,7 @@ const TeacherController = {
 
       const teachersWithUrls = teachers.map((teacher) => ({
         ...teacher,
+        id: req.app.locals.hashids.encode(teacher.id),
         pas_foto: teacher.pas_foto,
       }));
 
@@ -22,9 +23,6 @@ const TeacherController = {
   },
   createTeacher: async (req, res) => {
     try {
-      console.log("REQ.BODY:", req.body);
-      console.log("REQ.FILES:", req.files);
-
       const file = req.files?.["pas_foto"]?.[0];
 
       const { nama_guru, nip, keterangan_guru } = req.body;
@@ -48,6 +46,7 @@ const TeacherController = {
         nip,
         keterangan_guru,
         pas_foto: uploaded.pas_foto.url,
+        file_id: uploaded.pas_foto.fileId,
         author: req.user.id,
       };
 
@@ -55,7 +54,10 @@ const TeacherController = {
 
       return res.status(201).json({
         success: true,
-        data: newTeacher,
+        data: {
+          ...newTeacher,
+          id: req.app.locals.hashids.encode(newTeacher.id),
+        },
       });
     } catch (error) {
       console.error("Error creating teacher:", error);
@@ -69,8 +71,15 @@ const TeacherController = {
 
   updateTeacher: async (req, res) => {
     try {
-      const { id } = req.params;
-      // const userId = req.user.id;
+      const hashedId = req.params.id;
+      const id = req.app.locals.hashids.decode(hashedId)[0];
+
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid teacher ID",
+        });
+      }
 
       // Cari teacher dulu
       const teacher = await Teacher.findById(id);
@@ -81,38 +90,41 @@ const TeacherController = {
         });
       }
 
-      // Handle upload pas_foto via UploadService
       let pas_foto = teacher.pas_foto; // default ke yang lama
+      let file_id = teacher.file_id; // default ke yang lama
 
       // Jika ada file baru di req.files
       if (req.files && req.files.pas_foto && req.files.pas_foto.length > 0) {
+        const file = req.files.pas_foto[0]; // Get the file from req.files
         // Upload file baru ke ImageKit
         const uploadedFiles = await UploadService.upload(
-          req.files,
+          { pas_foto: [file] },
           "teacher-photo",
-          ["teacher"]
+          ["teacher", "photo"]
         );
         const newPhoto = uploadedFiles.pas_foto;
 
         if (newPhoto) {
           try {
             // Hapus foto lama dari ImageKit (kalau ada)
-            if (pas_foto && pas_foto.fileId) {
-              await UploadService.delete(pas_foto.fileId);
+            if (file_id) {
+              await UploadService.delete(file_id);
             }
-            pas_foto = newPhoto;
           } catch (error) {
             console.error("Error deleting old photo:", error);
             // Continue with update even if delete fails
           }
+          pas_foto = newPhoto.url;
+          file_id = newPhoto.fileId;
         }
       } else if (req.body.keepExistingImage === "false") {
         try {
           // Kalau user tidak ingin keep image, berarti hapus foto lama
-          if (pas_foto && pas_foto.fileId) {
-            await UploadService.delete(pas_foto.fileId);
+          if (file_id) {
+            await UploadService.delete(file_id);
           }
           pas_foto = null;
+          file_id = null;
         } catch (error) {
           console.error("Error deleting old photo:", error);
           // Continue with update even if delete fails
@@ -125,15 +137,15 @@ const TeacherController = {
         nip: req.body.nip,
         keterangan_guru: req.body.keterangan_guru,
         pas_foto,
+        file_id,
       });
-
-      const photoUrl = pas_foto ? pas_foto.url : null;
 
       res.json({
         success: true,
         data: {
           ...updatedTeacher,
-          pas_foto: photoUrl,
+          id: req.app.locals.hashids.encode(updatedTeacher.id),
+          pas_foto,
         },
       });
     } catch (error) {
@@ -156,7 +168,15 @@ const TeacherController = {
 
   deleteTeacher: async (req, res) => {
     try {
-      const { id } = req.params;
+      const hashedId = req.params.id;
+      const id = req.app.locals.hashids.decode(hashedId)[0];
+
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid teacher ID",
+        });
+      }
 
       // Get teacher data first to get the fileId
       const teacher = await Teacher.findById(id);
@@ -169,12 +189,9 @@ const TeacherController = {
       }
 
       // Delete photo from ImageKit if exists
-      if (teacher.pas_foto) {
+      if (teacher.file_id) {
         try {
-          if (teacher.pas_foto.fileId) {
-            // Delete from ImageKit using UploadService
-            await UploadService.delete(teacher.pas_foto.fileId);
-          }
+          await UploadService.delete(teacher.file_id);
         } catch (err) {
           console.error("Error deleting photo from ImageKit:", err);
         }

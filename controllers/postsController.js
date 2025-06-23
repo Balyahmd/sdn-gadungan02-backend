@@ -1,14 +1,15 @@
 import Post from "../models/Post.js";
-import UploadService from "../service/uploadService.js";
 import fs from "fs";
+import UploadService from "../service/uploadService.js";
 
 const PostsController = {
   getAllPosts: async (req, res) => {
     try {
-      const posts = await Post.findAll(req.query.search || ""); // Ensure search param is never undefined
+      const posts = await Post.findAll(req.query.search || "");
 
       const postsWithUrls = posts.map((post) => ({
         ...post,
+        id: req.app.locals.hashids.encode(post.id),
         thumbnail_postingan: post.thumbnail_postingan,
       }));
 
@@ -25,9 +26,17 @@ const PostsController = {
 
   getPostById: async (req, res) => {
     try {
-      const { id } = req.params;
+      const hashedId = req.params.id;
+      const id = req.app.locals.hashids.decode(hashedId)[0];
 
-      const post = await Post.findById(id); // menggunakan method kustom kamu
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid post ID",
+        });
+      }
+
+      const post = await Post.findById(id);
 
       if (!post) {
         return res.status(404).json({
@@ -40,7 +49,8 @@ const PostsController = {
         success: true,
         data: {
           ...post,
-          thumbnail_postingan: post.thumbnail_postingan, // jika ada field khusus
+          id: req.app.locals.hashids.encode(post.id),
+          thumbnail_postingan: post.thumbnail_postingan,
         },
       });
     } catch (error) {
@@ -55,8 +65,7 @@ const PostsController = {
 
   createPost: async (req, res) => {
     try {
-      console.log("REQ.BODY:", req.body);
-      console.log("REQ.FILES:", req.files);
+      console.log("Request Files:", req.files);
 
       const file = req.files?.["thumbnail_postingan"]?.[0];
 
@@ -75,7 +84,6 @@ const PostsController = {
         });
       }
 
-      // Upload ke ImageKit
       const uploaded = await UploadService.upload(
         { thumbnail_postingan: [file] },
         "post-thumbnail",
@@ -88,6 +96,7 @@ const PostsController = {
         text_postingan,
         kategori,
         keyword,
+        file_id: uploaded.thumbnail_postingan.fileId,
         thumbnail_postingan: uploaded.thumbnail_postingan.url,
         author: req.user.id,
       };
@@ -96,7 +105,10 @@ const PostsController = {
 
       return res.status(201).json({
         success: true,
-        data: newPost,
+        data: {
+          ...newPost,
+          id: req.app.locals.hashids.encode(newPost.id),
+        },
       });
     } catch (error) {
       console.error("Error creating post:", error);
@@ -107,12 +119,20 @@ const PostsController = {
       });
     }
   },
+
   updatePost: async (req, res) => {
     try {
-      const { id } = req.params;
+      const hashedId = req.params.id;
+      const id = req.app.locals.hashids.decode(hashedId)[0];
       const userId = req.user.id;
 
-      // Cari post dulu sebelum cek owner
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid post ID",
+        });
+      }
+
       const post = await Post.findById(id);
       if (!post) {
         return res.status(404).json({
@@ -121,7 +141,6 @@ const PostsController = {
         });
       }
 
-      // Cek owner setelah post ditemukan
       const isOwner = await Post.isOwner(id, userId);
       if (!isOwner) {
         return res.status(403).json({
@@ -130,49 +149,42 @@ const PostsController = {
         });
       }
 
-      // Handle upload thumbnail_postingan via UploadService
-      let thumbnail_postingan = post.thumbnail_postingan; // default ke yang lama (object dari ImageKit)
+      let thumbnail_postingan = post.thumbnail_postingan;
+      let file_id = post.file_id;
 
-      // Jika ada file baru di req.files
-      if (
-        req.files &&
-        req.files.thumbnail_postingan &&
-        req.files.thumbnail_postingan.length > 0
-      ) {
-        // Upload file baru ke ImageKit
-        const uploadedFiles = await UploadService.upload(
-          req.files,
-          "thumbnail_postingan",
-          ["post-thumbnail"]
+      // Handle file upload if new file is provided
+      if (req.files?.thumbnail_postingan?.[0]) {
+        const file = req.files.thumbnail_postingan[0];
+        const uploaded = await UploadService.upload(
+          { thumbnail_postingan: [file] },
+          "post-thumbnail",
+          ["postingan", "thumbnail"]
         );
-        const newThumbnail = uploadedFiles.thumbnail_postingan;
 
-        if (newThumbnail) {
-          try {
-            // Hapus thumbnail lama dari ImageKit (kalau ada)
-            if (thumbnail_postingan && thumbnail_postingan.fileId) {
-              await UploadService.delete(thumbnail_postingan.fileId);
+        if (uploaded.thumbnail_postingan) {
+          if (file_id) {
+            try {
+              await UploadService.delete(file_id);
+            } catch (error) {
+              console.error("Error deleting old thumbnail:", error);
             }
-            thumbnail_postingan = newThumbnail;
+          }
+
+          thumbnail_postingan = uploaded.thumbnail_postingan.url;
+          file_id = uploaded.thumbnail_postingan.fileId;
+        }
+      } else if (req.body.removeImage === "true") {
+        if (file_id) {
+          try {
+            await UploadService.delete(file_id);
           } catch (error) {
-            console.error("Error deleting old thumbnail:", error);
-            // Continue with update even if delete fails
+            console.error("Error deleting thumbnail:", error);
           }
         }
-      } else if (req.body.keepExistingImage === "false") {
-        try {
-          // Kalau user tidak ingin keep image, berarti hapus thumbnail lama
-          if (thumbnail_postingan && thumbnail_postingan.fileId) {
-            await UploadService.delete(thumbnail_postingan.fileId);
-          }
-          thumbnail_postingan = null;
-        } catch (error) {
-          console.error("Error deleting old thumbnail:", error);
-          // Continue with update even if delete fails
-        }
+        thumbnail_postingan = null;
+        file_id = null;
       }
 
-      // Update post data
       const updatedPost = await Post.update(id, {
         title_postingan: req.body.title_postingan,
         deskripsi_postingan: req.body.deskripsi_postingan,
@@ -180,18 +192,19 @@ const PostsController = {
         kategori: req.body.kategori,
         keyword: req.body.keyword,
         thumbnail_postingan,
+        file_id,
       });
-
-      const thumbnailUrl = thumbnail_postingan ? thumbnail_postingan.url : null;
 
       res.json({
         success: true,
         data: {
           ...updatedPost,
-          thumbnail_postingan: thumbnailUrl,
+          id: req.app.locals.hashids.encode(updatedPost.id),
+          thumbnail_postingan,
         },
       });
     } catch (error) {
+      // Clean up uploaded files if error occurs
       if (req.files) {
         for (const fileArray of Object.values(req.files)) {
           fileArray.forEach((file) => {
@@ -211,9 +224,16 @@ const PostsController = {
 
   deletePost: async (req, res) => {
     try {
-      const { id } = req.params;
+      const hashedId = req.params.id;
+      const id = req.app.locals.hashids.decode(hashedId)[0];
 
-      // Get post data first to get the fileId
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid post ID",
+        });
+      }
+
       const post = await Post.findById(id);
 
       if (!post) {
@@ -224,7 +244,6 @@ const PostsController = {
       }
 
       const isOwner = await Post.isOwner(id, req.user.id);
-
       if (!isOwner) {
         return res.status(403).json({
           success: false,
@@ -232,15 +251,11 @@ const PostsController = {
         });
       }
 
-      // Delete thumbnail from storage if exists
-      if (post.thumbnail_postingan) {
+      if (post.file_id) {
         try {
-          const thumbnailData = JSON.parse(post.thumbnail_postingan);
-          if (thumbnailData.fileId) {
-            await UploadService.delete(thumbnailData.fileId);
-          }
+          await UploadService.delete(post.file_id);
         } catch (err) {
-          console.error("Error parsing thumbnail data:", err);
+          console.error("Error deleting thumbnail data:", err);
         }
       }
 

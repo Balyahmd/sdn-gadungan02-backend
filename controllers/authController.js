@@ -3,8 +3,6 @@ import User from "../models/User.js";
 
 export const login = async (req, res) => {
   const { username, password } = req.body;
-  // console.log("Login attempt for:", username);
-  // console.log("Body:", req.body);
 
   try {
     const trimmedUsername = username.trim();
@@ -41,19 +39,17 @@ export const login = async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    // console.log("Login successful");
     res.json({
       success: true,
       token,
       user: {
-        id: user.id,
+        id: req.app.locals.hashids.encode(user.id),
         username: user.username,
         email: user.email,
         role: user.role,
       },
     });
   } catch (err) {
-    // console.error("Login error:", err);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -65,14 +61,15 @@ export const login = async (req, res) => {
 export const verify = async (req, res) => {
   res.json({
     success: true,
-    user: req.user,
+    user: {
+      ...req.user,
+      id: req.app.locals.hashids.encode(req.user.id)
+    },
   });
 };
 
 export const logout = async (req, res) => {
   try {
-    // console.log("Logout request for user:", req.user.id);
-
     res.clearCookie("token", {
       httpOnly: true,
       sameSite: "strict",
@@ -84,7 +81,6 @@ export const logout = async (req, res) => {
       message: "Logged out successfully",
     });
   } catch (err) {
-    // console.error("Logout endpoint error:", err);
     res.status(500).json({
       success: false,
       message: "Logout failed",

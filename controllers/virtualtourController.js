@@ -6,17 +6,24 @@ const VirtualTourController = {
   async getAllVirtualTours(req, res) {
     try {
       const { search } = req.query;
-      const tours = await VirtualTour.findAll(search);
+      const tours = await VirtualTour.findAll(search || "");
 
-      // Ensure we return an array in the data property
+      const toursWithIds = Array.isArray(tours)
+        ? tours.map((tour) => ({
+            ...tour,
+            id: tour.id,
+          }))
+        : [];
+
       res.json({
         success: true,
-        data: Array.isArray(tours) ? tours : [],
+        data: toursWithIds,
       });
     } catch (error) {
+      console.error("Error fetching virtual tours:", error);
       res.status(500).json({
         success: false,
-        message: "Failed to get virtual tours",
+        message: "Gagal mengambil data virtual tour",
         error: error.message,
       });
     }
@@ -24,16 +31,29 @@ const VirtualTourController = {
 
   async getVirtualTour(req, res) {
     try {
-      const tour = await VirtualTour.findById(req.params.id);
+      const id = req.params.id;
+
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid virtual tour ID",
+        });
+      }
+
+      const tour = await VirtualTour.findById(id);
       if (!tour) {
         return res.status(404).json({
           success: false,
           message: "Virtual tour not found",
         });
       }
+
       res.json({
         success: true,
-        data: tour,
+        data: {
+          ...tour,
+          id: tour.id,
+        },
       });
     } catch (error) {
       res.status(500).json({
@@ -46,16 +66,9 @@ const VirtualTourController = {
 
   async createVirtualTour(req, res) {
     try {
-      console.log("Full request:", {
-        body: req.body,
-        files: req.files,
-        user: req.user,
-      });
+      const file = req.files?.["gambar_panorama"]?.[0];
 
       const { nama_ruangan, hotspots } = req.body;
-      const author = req.user.id;
-
-      const file = req.files?.["gambar_panorama"]?.[0];
 
       if (!file) {
         return res.status(400).json({
@@ -64,69 +77,115 @@ const VirtualTourController = {
         });
       }
 
-      // Upload ke ImageKit
-      const uploaded = await UploadService.upload(
-        { gambar_panorama: [file] },
-        "virtual-tour",
-        ["panorama"]
-      );
+      let uploaded;
+      try {
+        uploaded = await UploadService.upload(
+          { gambar_panorama: [file] },
+          "virtual-tour",
+          ["gambar", "panorama"]
+        );
+      } catch (uploadError) {
+        console.error("Image upload error:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload panorama image",
+          error: uploadError.message,
+        });
+      }
 
-      // 1. Create the panorama first
-      const panorama = await VirtualTour.create({
+      const panoramaData = {
         nama_ruangan,
         gambar_panorama: uploaded.gambar_panorama.url,
-        author,
-      });
+        file_id: uploaded.gambar_panorama.fileId,
+        author: req.user.id,
+      };
 
-      console.log("Created panorama:", panorama);
+      let newPanorama;
+      try {
+        newPanorama = await VirtualTour.create(panoramaData);
+      } catch (dbError) {
+        console.error("Database create panorama error:", dbError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to create panorama",
+          error: dbError.message,
+        });
+      }
 
-      // 2. Create hotspots if they exist
+      // Buat hotspot jika ada
       if (hotspots) {
         try {
-          const parsedHotspots = JSON.parse(hotspots);
-          console.log("Parsed hotspots:", parsedHotspots);
+          const parsedHotspots = Array.isArray(hotspots)
+            ? hotspots
+            : JSON.parse(hotspots);
 
-          for (const hotspot of parsedHotspots) {
-            await VirtualTour.createHotspot({
-              id_panorama: panorama.id,
-              pitch: hotspot.pitch,
-              yaw: hotspot.yaw,
-              targetPanoramaId: hotspot.targetPanoramaId || null,
-              name: hotspot.text || "Hotspot",
-              title: hotspot.text || "Hotspot",
-              deskripsi: hotspot.text || "Hotspot description",
-            });
+          if (Array.isArray(parsedHotspots)) {
+            for (const hotspot of parsedHotspots) {
+              let targetId = null;
+              if (hotspot.targetPanoramaId) {
+                targetId = hotspot.targetPanoramaId;
+              }
+
+              await VirtualTour.createHotspot({
+                id_panorama: newPanorama.id,
+                pitch: Number(hotspot.pitch),
+                yaw: Number(hotspot.yaw),
+                targetPanoramaId: targetId,
+                name: hotspot.text || "Hotspot",
+                title: hotspot.text || "Hotspot",
+                deskripsi:
+                  hotspot.description || hotspot.text || "Hotspot description",
+                kategori_Hostspot,
+              });
+            }
           }
         } catch (error) {
           console.error("Hotspot creation error:", error);
-          // Continue even if hotspots fail
+          // Lanjutkan meskipun gagal membuat hotspot
         }
       }
 
-      // 3. Get full panorama with hotspots
-      const fullPanorama = await VirtualTour.findById(panorama.id);
-      console.log("Full panorama with hotspots:", fullPanorama);
+      // Ambil panorama lengkap beserta hotspot
+      let fullPanorama;
+      try {
+        fullPanorama = await VirtualTour.findById(newPanorama.id);
+      } catch (findError) {
+        console.error("Error fetching full panorama:", findError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to fetch created panorama",
+          error: findError.message,
+        });
+      }
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
-        data: fullPanorama,
+        data: {
+          ...fullPanorama,
+          id: fullPanorama.id,
+        },
       });
     } catch (error) {
-      console.error("Create virtual tour error:", {
-        message: error.message,
-        stack: error.stack,
-      });
-      res.status(500).json({
+      console.error("Error creating virtual tour:", error);
+      return res.status(500).json({
         success: false,
-        message: "Failed to create virtual tour",
-        error: error.message,
+        message: error.message || "Failed to create virtual tour",
+        error: error.stack,
       });
     }
   },
 
   async updateVirtualTour(req, res) {
     try {
-      const { id } = req.params;
+      const id = req.params.id;
+
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid virtual tour ID",
+        });
+      }
+
       const { nama_ruangan } = req.body;
 
       // Get existing tour
@@ -140,7 +199,8 @@ const VirtualTourController = {
 
       let updateData = {
         nama_ruangan,
-        gambar_panorama: oldTour.gambar_panorama, // Keep existing image by default
+        gambar_panorama: oldTour.gambar_panorama,
+        file_id: oldTour.file_id,
       };
 
       // If new file uploaded
@@ -170,7 +230,10 @@ const VirtualTourController = {
 
       res.json({
         success: true,
-        data: updated,
+        data: {
+          ...updated,
+          id: updated.id,
+        },
       });
     } catch (error) {
       console.error("Update Virtual Tour Error:", error);
@@ -184,7 +247,14 @@ const VirtualTourController = {
 
   async deleteVirtualTour(req, res) {
     try {
-      const { id } = req.params;
+      const id = req.params.id;
+
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid virtual tour ID",
+        });
+      }
 
       // 1. Get the panorama first
       const tour = await VirtualTour.findById(id);
@@ -201,11 +271,11 @@ const VirtualTourController = {
         [id]
       );
 
-      // 3. Delete image from ImageKit if exists
       if (tour.gambar_panorama) {
         try {
-          const fileId = tour.gambar_panorama;
-          await UploadService.delete(fileId);
+          if (tour.file_id) {
+            await UploadService.delete(tour.file_id);
+          }
         } catch (error) {
           console.error("Error deleting image from ImageKit:", error);
         }
@@ -230,7 +300,15 @@ const VirtualTourController = {
 
   async getHotspot(req, res) {
     try {
-      const { id } = req.params;
+      const id = req.params.id;
+
+      if (!id) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid panorama ID",
+        });
+      }
+
       const panorama = await VirtualTour.findById(id);
 
       if (!panorama) {
@@ -240,9 +318,19 @@ const VirtualTourController = {
         });
       }
 
+      const hotspotsWithIds =
+        panorama.hotspots?.map((hotspot) => ({
+          ...hotspot,
+          id: hotspot.id,
+          targetPanoramaId: hotspot.targetPanoramaId
+            ? hotspot.targetPanoramaId
+            : null,
+          kategori_hotspot: hotspot.kategori_hotspot || null,
+        })) || [];
+
       res.json({
         success: true,
-        data: panorama.hotspots || [],
+        data: hotspotsWithIds,
       });
     } catch (error) {
       res.status(500).json({
@@ -253,31 +341,39 @@ const VirtualTourController = {
     }
   },
 
-  // In virtualtourController.js
   async createHotspot(req, res) {
     try {
-      const { id } = req.params;
-      const { pitch, yaw, targetPanoramaId, text, description } = req.body;
+      const id = req.params.id;
 
-      // Validate panorama ID is a number
-      if (isNaN(Number(id))) {
+      if (!id) {
         return res.status(400).json({
           success: false,
           message: "Invalid panorama ID",
         });
       }
 
+      const {
+        pitch,
+        yaw,
+        targetPanoramaId,
+        text,
+        description,
+        kategori_hotspot,
+      } = req.body;
+
       // Validate required fields
-      if (!pitch || !yaw || !text) {
+      if (!pitch || !yaw) {
         return res.status(400).json({
           success: false,
-          message: "Missing required fields (pitch, yaw, text)",
+          message: "Missing required fields (pitch, yaw)",
         });
       }
 
+      let decodedTargetId = null;
       // Validate target panorama exists if provided
       if (targetPanoramaId) {
-        const targetExists = await VirtualTour.findById(targetPanoramaId);
+        decodedTargetId = targetPanoramaId;
+        const targetExists = await VirtualTour.findById(decodedTargetId);
         if (!targetExists) {
           return res.status(400).json({
             success: false,
@@ -287,13 +383,14 @@ const VirtualTourController = {
       }
 
       const hotspot = await VirtualTour.createHotspot({
-        id_panorama: Number(id), // Ensure numeric ID
+        id_panorama: id,
         pitch,
         yaw,
-        targetPanoramaId: targetPanoramaId ? Number(targetPanoramaId) : null,
+        targetPanoramaId: decodedTargetId,
         name: text,
         title: text,
         deskripsi: description || "",
+        kategori_hotspot: kategori_hotspot || null,
       });
 
       res.status(201).json({
@@ -304,7 +401,10 @@ const VirtualTourController = {
           yaw: hotspot.yaw,
           text: hotspot.name,
           description: hotspot.deskripsi,
-          targetPanoramaId: hotspot.targetpanoramald,
+          kategori_hotspot: hotspot.kategori_hotspot || null,
+          targetPanoramaId: hotspot.targetpanoramald
+            ? hotspot.targetpanoramald
+            : null,
         },
       });
     } catch (error) {
@@ -319,9 +419,24 @@ const VirtualTourController = {
 
   async updateHotspot(req, res) {
     try {
-      const { id, hotspotId } = req.params;
-      const { pitch, yaw, targetPanoramaId, text, description, type } =
-        req.body;
+      const panoramaId = req.params.id;
+      const hotspotId = req.params.hotspotId;
+
+      if (!panoramaId || !hotspotId) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid panorama or hotspot ID",
+        });
+      }
+
+      const {
+        pitch,
+        yaw,
+        targetPanoramaId,
+        text,
+        description,
+        kategori_hotspot,
+      } = req.body;
 
       // Validate required fields
       if (!pitch || !yaw || !text) {
@@ -331,14 +446,19 @@ const VirtualTourController = {
         });
       }
 
-      // In your controller's updateHotspot method
+      let decodedTargetId = null;
+      if (targetPanoramaId) {
+        decodedTargetId = targetPanoramaId;
+      }
+
       const hotspot = await VirtualTour.updateHotspot(hotspotId, {
         pitch,
         yaw,
-        targetPanoramaId, // Directly use the target ID
+        targetPanoramaId: decodedTargetId,
         name: text,
         title: text,
         deskripsi: description || "",
+        kategori_hotspot: kategori_hotspot || null,
       });
 
       res.json({
@@ -350,7 +470,10 @@ const VirtualTourController = {
           text: hotspot.name,
           description: hotspot.deskripsi,
           type: hotspot.type,
-          targetPanoramaId: hotspot.targetpanoramald,
+          kategori_hotspot: hotspot.kategori_hotspot || null,
+          targetPanoramaId: hotspot.targetpanoramald
+            ? hotspot.targetpanoramald
+            : null,
         },
       });
     } catch (error) {
@@ -365,7 +488,15 @@ const VirtualTourController = {
 
   async deleteHotspot(req, res) {
     try {
-      const { hotspotId } = req.params;
+      const hotspotId = req.params.hotspotId;
+
+      if (!hotspotId) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid hotspot ID",
+        });
+      }
+
       await VirtualTour.deleteHotspot(hotspotId);
 
       res.json({

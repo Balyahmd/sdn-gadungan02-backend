@@ -11,7 +11,7 @@ export class ErrorHandler extends Error {
 }
 
 const allowedImageTypes = ["image/jpg", "image/jpeg", "image/png"];
-const maxFileSize = 2 * 1024 * 1024;
+const maxFileSize = 15 * 1024 * 1024;
 
 const multerConfig = multer({
   storage: multer.memoryStorage(),

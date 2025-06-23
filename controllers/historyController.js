@@ -10,7 +10,7 @@ const HistoryController = {
           success: true,
           data: {
             id: null,
-            text_history: "Sejarah sekolah belum tersedia",
+            text_history: "Sejarah sekolah belum tersedia", 
             author: null,
             created_at: null,
           },
@@ -19,7 +19,10 @@ const HistoryController = {
 
       res.json({
         success: true,
-        data: history,
+        data: {
+          ...history,
+          id: req.app.locals.hashids.encode(history.id)
+        },
       });
     } catch (error) {
       console.error("Error getting school history:", error);
@@ -64,7 +67,10 @@ const HistoryController = {
 
       res.json({
         success: true,
-        data: updatedHistory,
+        data: {
+          ...updatedHistory,
+          id: req.app.locals.hashids.encode(updatedHistory.id)
+        },
       });
     } catch (error) {
       console.error("Error updating school history:", error);

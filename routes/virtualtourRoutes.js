@@ -1,9 +1,7 @@
 import express from "express";
 import VirtualTourController from "../controllers/virtualtourController.js";
 import { authenticate } from "../middleware/authMiddleware.js";
-import { virtualUpload } from "../middleware/uploadMiddleware.js";
 import fileHandlerMiddleware from "../middleware/fileHandler.js";
-
 const router = express.Router();
 
 router.get("/", VirtualTourController.getAllVirtualTours);

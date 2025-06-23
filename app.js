@@ -3,7 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
+import Hashids from "hashids";
 
 import authRoutes from "./routes/authRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
@@ -13,14 +13,20 @@ import historyRoutes from "./routes/historyRoutes.js";
 import visimisiRoutes from "./routes/visimisiRoutes.js";
 import virtualtourRoutes from "./routes/virtualtourRoutes.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+
+const hashids = new Hashids(
+  process.env.HASHIDS_SECRET || "this is my salt",
+  10
+);
 
 const app = express();
 
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.locals.hashids = hashids;
 
 app.use(
   cors({
@@ -29,8 +35,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
-
-app.use("/static", express.static(path.join(process.cwd(), "static")));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

@@ -8,6 +8,7 @@ export class UploadService {
         gambar_panorama: null,
         thumbnail_postingan: null,
       };
+
       for (const [fileType, fileArray] of Object.entries(files)) {
         if (fileArray && fileArray.length > 0) {
           const file = fileArray[0];
@@ -21,13 +22,17 @@ export class UploadService {
             fileName: `${fileType}-${Date.now()}.${extension}`,
           });
 
-          uploadedFiles[fileType] = uploadedFile;
+          uploadedFiles[fileType] = {
+            url: uploadedFile.url,
+            fileId: uploadedFile.fileId,
+          };
         }
       }
 
       return uploadedFiles;
     } catch (error) {
-      const err = new Error(error.message);
+      console.error("Error uploading file:", error);
+      const err = new Error("Failed to upload file");
       err.statusCode = 500;
       throw err;
     }
@@ -41,25 +46,19 @@ export class UploadService {
         throw err;
       }
 
-      // Tambahkan logging untuk debug
-      console.log("Attempting to delete file with ID:", fileId);
-
-      const result = await imagekit.deleteFile(fileId);
-      console.log("Delete result:", result);
-
-      return result;
+      await imagekit.deleteFile(fileId);
+      return true;
     } catch (error) {
       console.error("Error deleting file:", error);
 
-      // Cek apakah error dari ImageKit
       if (error.message && error.message.includes("File not found")) {
-        const err = new Error("File ID tidak ditemukan");
+        const err = new Error("File not found");
         err.statusCode = 404;
         throw err;
       }
 
-      const err = new Error(`Failed to delete image: ${error.message}`);
-      err.statusCode = error.statusCode || 500;
+      const err = new Error("Failed to delete file");
+      err.statusCode = 500;
       throw err;
     }
   }

@@ -1,6 +1,4 @@
 import db from "../config/db.js";
-import path from "path";
-import fs from "fs";
 
 class Teacher {
   static async findAll(search = "") {
@@ -16,22 +14,37 @@ class Teacher {
     const result = await db.query(query, params);
     return result.rows; // Langsung return rows
   }
-  static async create({ nama_guru, pas_foto, nip, keterangan_guru, author }) {
-    try {
-      console.log("Data to insert:", {
-        nama_guru,
-        pas_foto: pas_foto?.length,
-        nip,
-        keterangan_guru: keterangan_guru?.length,
-        author,
-      });
+  static async create(teacherData) {
+    const { nama_guru, pas_foto, nip, keterangan_guru, file_id, author } =
+      teacherData;
 
-      const result = await db.query(
-        `INSERT INTO tb_guru 
-                (nama_guru, pas_foto, nip, keterangan_guru, author, created_at, updated_at) 
-                VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING *`,
-        [nama_guru, pas_foto, nip, keterangan_guru, author]
-      );
+    const query = `
+      INSERT INTO tb_guru (
+        nama_guru,
+        pas_foto,
+        nip,
+        keterangan_guru,
+        author,
+        file_id,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING *`;
+
+    try {
+      const result = await db.query(query, [
+        nama_guru,
+        pas_foto,
+        nip,
+        keterangan_guru,
+        author,
+        file_id,
+      ]);
+
+      if (!result.rows?.[0]) {
+        throw new Error("Failed to create teacher");
+      }
+
       return result.rows[0];
     } catch (error) {
       console.error("Error in Teacher.create:", error);
@@ -51,14 +64,17 @@ class Teacher {
     }
   }
 
-  static async update(id, { nama_guru, pas_foto, nip, keterangan_guru }) {
+  static async update(
+    id,
+    { nama_guru, pas_foto, nip, file_id, keterangan_guru }
+  ) {
     try {
       const result = await db.query(
         `UPDATE tb_guru SET 
                 nama_guru = $1, pas_foto = $2, nip = $3, 
-                keterangan_guru = $4
-                WHERE id = $5 RETURNING *`,
-        [nama_guru, pas_foto, nip, keterangan_guru, id]
+                keterangan_guru = $4, file_id = $5, updated_at = NOW()
+                WHERE id = $6 RETURNING *`,
+        [nama_guru, pas_foto, nip, keterangan_guru, file_id, id]
       );
       return result.rows[0];
     } catch (error) {
@@ -89,22 +105,6 @@ class Teacher {
       return result.rows[0]?.pas_foto;
     } catch (error) {
       console.error("Error in Teacher.getImagePath:", error);
-      throw error;
-    }
-  }
-
-  static async deleteImageFile(filePath) {
-    try {
-      if (filePath) {
-        const fullPath = path.join(process.cwd(), filePath);
-        if (fs.existsSync(fullPath)) {
-          fs.unlinkSync(fullPath);
-          return true;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error("Error in Teacher.deleteImageFile:", error);
       throw error;
     }
   }
