@@ -13,9 +13,6 @@ import historyRoutes from "./routes/historyRoutes.js";
 import visimisiRoutes from "./routes/visimisiRoutes.js";
 import virtualtourRoutes from "./routes/virtualtourRoutes.js";
 
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
-
 const hashids = new Hashids(
   process.env.HASHIDS_SECRET || "this is my salt",
   10
@@ -35,6 +32,10 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
+
+app.get("/", (req, res) => {
+  res.send("Hello from Api SDN Gadungan 02 WEB Apps");
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
