@@ -103,6 +103,8 @@ const VirtualTourController = {
       let newPanorama;
       try {
         newPanorama = await VirtualTour.create(panoramaData);
+        // Debug: log hasil create panorama
+        console.log("DEBUG: Hasil create panorama:", newPanorama);
       } catch (dbError) {
         console.error("Database create panorama error:", dbError);
         return res.status(500).json({
@@ -133,9 +135,8 @@ const VirtualTourController = {
                 targetPanoramaId: targetId,
                 name: hotspot.text || "Hotspot",
                 title: hotspot.text || "Hotspot",
-                deskripsi:
-                  hotspot.description || hotspot.text || "Hotspot description",
-                kategori_Hostspot,
+                deskripsi: hotspot.description,
+                kategori_hotspot: hotspot.text,
               });
             }
           }
@@ -342,6 +343,7 @@ const VirtualTourController = {
   },
 
   async createHotspot(req, res) {
+    console.log("Request Body:", req.body);
     try {
       const id = req.params.id;
 
@@ -401,7 +403,7 @@ const VirtualTourController = {
           yaw: hotspot.yaw,
           text: hotspot.name,
           description: hotspot.deskripsi,
-          kategori_hotspot: hotspot.kategori_hotspot || null,
+          kategori_hotspot: hotspot.kategori_hotspot,
           targetPanoramaId: hotspot.targetpanoramald
             ? hotspot.targetpanoramald
             : null,
