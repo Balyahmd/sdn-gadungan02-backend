@@ -392,7 +392,7 @@ const VirtualTourController = {
         name: text,
         title: text,
         deskripsi: description || "",
-        kategori_hotspot: kategori_hotspot || null,
+        kategori_hotspot: kategori_hotspot,
       });
 
       res.status(201).json({
@@ -403,10 +403,10 @@ const VirtualTourController = {
           yaw: hotspot.yaw,
           text: hotspot.name,
           description: hotspot.deskripsi,
-          kategori_hotspot: hotspot.kategori_hotspot,
           targetPanoramaId: hotspot.targetpanoramald
             ? hotspot.targetpanoramald
             : null,
+          kategori_hotspot: hotspot.kategori_hotspot,
         },
       });
     } catch (error) {

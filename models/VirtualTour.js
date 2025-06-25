@@ -12,7 +12,6 @@ class VirtualTour {
     return rows[0];
   }
 
-  // In VirtualTour model
   static async findAll(search = "") {
     const query = `
       SELECT 
@@ -50,6 +49,7 @@ class VirtualTour {
         ) as hotspots
       FROM tb_panorama p
       ${search ? `WHERE p.nama_ruangan ILIKE '%${search}%'` : ""}
+      ORDER BY p.created_at DESC
     `;
     const { rows } = await db.query(query);
     return rows;
@@ -136,14 +136,14 @@ class VirtualTour {
         RETURNING *
     `;
     const values = [
-      Number(id_panorama), // Ensure numeric
+      Number(id_panorama),
       pitch,
       yaw,
       targetPanoramaId ? Number(targetPanoramaId) : null, // Ensure numeric or null
       name,
       title,
       deskripsi,
-      kategori_hotspot || null,
+      kategori_hotspot,
     ];
 
     try {

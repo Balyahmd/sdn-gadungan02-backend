@@ -21,7 +21,8 @@ export const authenticate = async (req, res, next) => {
     // Tambahkan data user lengkap ke request
     req.user = {
       id: user.id,
-      name: user.name || user.username, // Gunakan username jika name tidak ada
+      name: user.name || user.username,
+      username: user.username, // Gunakan username jika name tidak ada
       email: user.email,
       role: user.role,
     };

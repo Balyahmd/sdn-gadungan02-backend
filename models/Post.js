@@ -38,6 +38,18 @@ class Post {
     return result.rows;
   }
 
+  async findAllByUsername(search = "", username) {
+    // Sesuaikan query berdasarkan DB-mu
+    const sql = `
+      SELECT * FROM posts
+      WHERE username = ? AND (title_postingan LIKE ? OR deskripsi_postingan LIKE ?)
+      ORDER BY created_at DESC
+    `;
+    const queryParam = [`${username}`, `%${search}%`, `%${search}%`];
+    const [rows] = await db.query(sql, queryParam);
+    return rows;
+  }
+
   static async findById(id) {
     const result = await db.query(
       `SELECT 
