@@ -56,10 +56,11 @@ class User {
   }
 
   static async findById(id) {
-    const result = await db.query("SELECT id FROM tb_users WHERE id = $1", [
-      id,
-    ]);
-    return result.rows[0];
+    const result = await db.query(
+      "SELECT id, username, email, role, created_at, updated_at FROM tb_users WHERE id = $1",
+      [id]
+    );
+    return result.rows[0] || null;
   }
 
   // models/User.js
