@@ -5,6 +5,7 @@ import { authenticate } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.get("/", authenticate, UserController.getAllUsers);
+router.get("/:id", authenticate, UserController.getUserById);
 router.post("/", authenticate, UserController.createUser);
 router.put("/:id", authenticate, UserController.updateUser);
 router.delete("/:id", authenticate, UserController.deleteUser);

@@ -32,7 +32,7 @@ class Post {
       params.push(likeSearch, likeSearch, likeSearch, likeSearch);
     }
 
-    query += ` ORDER BY p.created_at DESC`;
+    query += ` ORDER BY p.updated_at DESC, p.created_at DESC`;
 
     const result = await db.query(query, params);
     return result.rows;

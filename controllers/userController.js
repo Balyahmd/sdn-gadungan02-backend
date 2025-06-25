@@ -18,6 +18,38 @@ const UserController = {
         .json({ success: false, message: "Failed to fetch users" });
     }
   },
+
+  getUserById: async (req, res) => {
+    try {
+      const hashedId = req.params.id;
+      const id = req.app.locals.hashids.decode(hashedId)[0];
+
+      if (!id) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Invalid user ID" });
+      }
+
+      const user = await User.findById(id);
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...user,
+          id: hashedId,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch user" });
+    }
+  },
+
   createUser: async (req, res) => {
     try {
       const { username, email, password, role } = req.body;
@@ -95,12 +127,10 @@ const UserController = {
 
       const emailInUse = await User.isEmailUsedByOtherUser(email, id);
       if (emailInUse) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Email already in use by another user",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Email already in use by another user",
+        });
       }
 
       const updateData = { username, email, role };
