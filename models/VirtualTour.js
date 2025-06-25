@@ -49,7 +49,7 @@ class VirtualTour {
         ) as hotspots
       FROM tb_panorama p
       ${search ? `WHERE p.nama_ruangan ILIKE '%${search}%'` : ""}
-      ORDER BY p.created_at DESC
+      ORDER BY p.updated_at DESC, p.created_at DESC
     `;
     const { rows } = await db.query(query);
     return rows;

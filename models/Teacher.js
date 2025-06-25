@@ -11,7 +11,7 @@ class Teacher {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    query += " ORDER BY created_at DESC";
+    query += " ORDER BY updated_at DESC, created_at DESC";
 
     const result = await db.query(query, params);
     return result.rows; // Langsung return rows
